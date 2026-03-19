@@ -12,17 +12,22 @@ DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://etfops:etfops123@localhos
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# Use SSL for cloud databases (Supabase requires it)
+# Use SSL for all non-local databases
 connect_args = {}
-if any(x in DATABASE_URL for x in ["supabase", "render.com", "neon.tech"]):
+if "localhost" not in DATABASE_URL and "127.0.0.1" not in DATABASE_URL:
     connect_args = {"sslmode": "require"}
 
-engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,
-    pool_recycle=300,
-    connect_args=connect_args
-)
+try:
+    engine = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+        pool_recycle=300,
+        connect_args=connect_args
+    )
+    print(f"Database engine created successfully")
+except Exception as e:
+    print(f"Failed to create database engine: {e}")
+    raise
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
