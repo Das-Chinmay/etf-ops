@@ -59,6 +59,8 @@ html,body{height:100%;background:var(--bg0);color:var(--text0);font-family:var(-
 .btn-primary:hover{background:var(--accent2);border-color:var(--accent2);color:white}
 .btn-danger{border-color:var(--red);color:var(--red)}
 .btn-danger:hover{background:rgba(255,77,106,.1)}
+.btn-success{border-color:var(--green);color:var(--green)}
+.btn-success:hover{background:rgba(0,214,143,.1)}
 .table-wrap{background:var(--bg1);border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:1.5rem}
 table{width:100%;border-collapse:collapse}
 thead th{padding:8px 1rem;text-align:left;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);font-family:var(--mono);border-bottom:1px solid var(--border);font-weight:400}
@@ -130,6 +132,10 @@ textarea.form-input{height:90px;resize:vertical}
 .check-text{font-size:12px;color:var(--text1);flex:1}
 .check-text.done{color:var(--text2);text-decoration:line-through}
 .check-owner{font-size:10px;color:var(--text2);font-family:var(--mono);margin-top:2px}
+.toast{position:fixed;bottom:1.5rem;right:1.5rem;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:.75rem 1rem;font-size:12px;font-family:var(--mono);color:var(--text0);z-index:200;display:none;animation:fadeIn .2s ease}
+.toast.show{display:block}
+.toast.success{border-color:var(--green);color:var(--green)}
+.toast.error{border-color:var(--red);color:var(--red)}
 </style>
 </head>
 <body>
@@ -286,7 +292,14 @@ textarea.form-input{height:90px;resize:vertical}
 
       <!-- FUNDS -->
       <div class="page" id="page-funds">
-        <div class="section-header"><div class="section-title">Fund Source of Truth</div><span style="font-size:11px;color:var(--text2);font-family:var(--mono)">Live from DB</span></div>
+        <div class="section-header">
+          <div class="section-title">Fund Source of Truth</div>
+          <select class="form-select" style="width:200px" id="fund-selector" onchange="loadHoldingsForFund()">
+            <option value="1">CRGX — Corgi Growth ETF</option>
+            <option value="2">CRGB — Corgi Bond ETF</option>
+            <option value="3">CRGG — Corgi Global ETF</option>
+          </select>
+        </div>
         <div class="stat-grid" id="fund-stats"><div class="stat-card" style="grid-column:span 4"><div class="loading">Loading...</div></div></div>
         <div class="table-wrap">
           <table><thead><tr><th>Ticker</th><th>Name</th><th>ISIN</th><th>Weight</th><th>Shares</th><th>Price</th><th>Market Value</th><th>Recon</th></tr></thead>
@@ -309,6 +322,9 @@ textarea.form-input{height:90px;resize:vertical}
     </div>
   </div>
 </div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
 
 <!-- MODAL: New Filing -->
 <div class="modal-bg" id="modal-newFiling" onclick="if(event.target===this)closeModal('newFiling')">
@@ -358,8 +374,23 @@ textarea.form-input{height:90px;resize:vertical}
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal('approve')">Cancel</button>
-      <button class="btn btn-danger">Reject</button>
+      <button class="btn btn-danger" onclick="closeModal('approve')">Reject</button>
       <button class="btn btn-primary" onclick="submitApproval()">Approve & Sign</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Resolve Exception -->
+<div class="modal-bg" id="modal-resolveExc" onclick="if(event.target===this)closeModal('resolveExc')">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Resolve Exception</div><button class="modal-close" onclick="closeModal('resolveExc')">×</button></div>
+    <div class="modal-body">
+      <div class="info-box" style="margin-bottom:1rem">Provide resolution notes before closing this exception. This will be recorded in the audit log.</div>
+      <div class="form-group"><label class="form-label">Resolution Notes (Required)</label><textarea class="form-input" id="resolve-notes" placeholder="Describe how this exception was resolved..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('resolveExc')">Cancel</button>
+      <button class="btn btn-success" onclick="submitResolve()">Resolve Exception</button>
     </div>
   </div>
 </div>
@@ -369,13 +400,25 @@ const API = window.location.hostname === 'localhost' || window.location.hostname
   ? 'http://localhost:8000/api'
   : 'https://etf-ops.onrender.com/api';
 
+// ─── Toast ─────────────────────────────────────────────────
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast show ${type}`;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
 // ─── API helpers ───────────────────────────────────────────
 async function api(path, opts={}) {
   try {
     const r = await fetch(API + path, { headers: {'Content-Type':'application/json'}, ...opts });
     if (!r.ok) throw new Error(await r.text());
     return await r.json();
-  } catch(e) { console.error('API error', path, e); return null; }
+  } catch(e) {
+    console.error('API error', path, e);
+    showToast('API error: ' + e.message, 'error');
+    return null;
+  }
 }
 
 // ─── Navigation ────────────────────────────────────────────
@@ -390,12 +433,13 @@ function nav(page, el) {
 
 // ─── Modals ────────────────────────────────────────────────
 let currentFilingId = null;
+let currentExcId = null;
 function openModal(id) { document.getElementById('modal-'+id).classList.add('open'); }
 function closeModal(id) { document.getElementById('modal-'+id).classList.remove('open'); }
 
 // ─── Badges ────────────────────────────────────────────────
 function statusBadge(s) {
-  const map = {filed:'green',accepted:'green',complete:'green',in_review:'amber',in_progress:'blue',pending_approval:'amber',not_started:'gray',draft:'gray',ixbrl_needed:'amber',not_submitted:'gray',open:'red',in_review2:'amber',resolved:'green',scheduled:'blue',delayed:'amber',ok:'green',price_break:'red',corp_action:'amber'};
+  const map = {filed:'green',accepted:'green',complete:'green',in_review:'amber',in_progress:'blue',pending_approval:'amber',not_started:'gray',draft:'gray',ixbrl_needed:'amber',not_submitted:'gray',open:'red',resolved:'green',scheduled:'blue',delayed:'amber',ok:'green',price_break:'red',corp_action:'amber'};
   const label = s?.replace(/_/g,' ') || '—';
   const cls = map[s] || 'gray';
   return `<span class="badge badge-${cls}">${label}</span>`;
@@ -404,14 +448,20 @@ function severityBadge(s) {
   const map = {CRITICAL:'red',HIGH:'amber',MEDIUM:'blue',LOW:'gray'};
   return `<span class="badge badge-${map[s]||'gray'}">${s}</span>`;
 }
+
+// FIX: properly parse timestamps
 function timeAgo(ts) {
   if (!ts) return '—';
-  const diff = Date.now() - new Date(ts);
-  const m = Math.floor(diff/60000);
+  const date = new Date(ts.replace(' ', 'T'));
+  if (isNaN(date.getTime())) return '—';
+  const diff = Date.now() - date.getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
   if (m < 60) return `${m}m ago`;
   if (m < 1440) return `${Math.floor(m/60)}h ago`;
   return `${Math.floor(m/1440)}d ago`;
 }
+
 function fmtMoney(n) {
   if (!n) return '$0';
   if (n >= 1e9) return '$' + (n/1e9).toFixed(1) + 'B';
@@ -425,7 +475,6 @@ async function loadDashboard() {
     api('/funds/stats'), api('/filings/'), api('/audit/'), api('/exceptions/'), api('/funds/')
   ]);
 
-  // Ticker
   if (funds) {
     document.getElementById('ticker').innerHTML = funds.map((f,i) => `
       <div class="ticker-item"><div class="ticker-sym">${f.ticker}</div><div class="ticker-val">$${f.nav.toFixed(2)} <span class="ticker-chg ${i===1?'delta-down':'delta-up'}">${i===1?'-0.12%':'+0.'+Math.floor(Math.random()*9+1)+'%'}</span></div></div>
@@ -433,32 +482,27 @@ async function loadDashboard() {
     `).join('');
   }
 
-  // Stats
   if (stats) {
     document.getElementById('stats-grid').innerHTML = `
       <div class="stat-card"><div class="stat-label">AUM (Total)</div><div class="stat-value">${fmtMoney(stats.total_aum)}</div><div class="stat-delta delta-up">↑ +$84M this month</div></div>
       <div class="stat-card"><div class="stat-label">Pending Filings</div><div class="stat-value">${stats.pending_filings}</div><div class="stat-delta delta-warn">⚠ 1 due in 3 days</div></div>
-      <div class="stat-card"><div class="stat-label">Open Exceptions</div><div class="stat-value">${stats.open_exceptions}</div><div class="stat-delta delta-down">↑ +2 since yesterday</div></div>
+      <div class="stat-card"><div class="stat-label">Open Exceptions</div><div class="stat-value">${stats.open_exceptions}</div><div class="stat-delta ${stats.open_exceptions>0?'delta-down':'delta-up'}">${stats.open_exceptions>0?'↑ Needs attention':'All clear'}</div></div>
       <div class="stat-card"><div class="stat-label">Active Funds</div><div class="stat-value">${stats.funds}</div><div class="stat-delta delta-up">All systems live</div></div>
     `;
     document.getElementById('badge-filings').textContent = stats.pending_filings;
     document.getElementById('badge-exceptions').textContent = stats.open_exceptions;
   }
 
-  // Filing calendar
   if (filings) {
     const upcoming = filings.filter(f => f.status !== 'filed').slice(0,5);
-    document.getElementById('filing-calendar').innerHTML = upcoming.map(f => {
-      const color = f.status === 'in_review' ? 'var(--red)' : 'var(--amber)';
-      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 1rem;border-bottom:1px solid var(--border)">
+    document.getElementById('filing-calendar').innerHTML = upcoming.map(f => `
+      <div style="display:flex;align-items:center;gap:10px;padding:9px 1rem;border-bottom:1px solid var(--border)">
         <div style="font-family:var(--mono);font-size:12px;color:var(--text0);width:80px">${f.form_type}</div>
         <div style="flex:1;font-size:12px;color:var(--text1)">${f.description||''}</div>
         <span class="badge badge-${f.status==='in_review'?'red':f.status==='filed'?'green':'amber'}">${f.due_date||'TBD'}</span>
-      </div>`;
-    }).join('');
+      </div>`).join('') || '<div class="loading">No upcoming filings</div>';
   }
 
-  // Audit feed
   if (auditData) {
     const iconMap = {APPROVE:'approved',FILED:'filed',FLAG:'flagged',UPDATE:'updated',INGEST:'filed',CREATE:'filed'};
     const emojiMap = {APPROVE:'✓',FILED:'↑',FLAG:'!',UPDATE:'~',INGEST:'↑',CREATE:'+'};
@@ -469,20 +513,18 @@ async function loadDashboard() {
       </div>`).join('');
   }
 
-  // Critical exceptions
   if (exceptions) {
     const crit = exceptions.filter(e => e.status === 'open').slice(0,3);
     const sev = {CRITICAL:'var(--red)',HIGH:'var(--amber)',MEDIUM:'var(--accent)'};
-    document.getElementById('critical-exceptions').innerHTML = crit.map(e => `
+    document.getElementById('critical-exceptions').innerHTML = crit.length ? crit.map(e => `
       <div class="exception-item">
         <div class="exc-severity" style="background:${sev[e.severity]||'var(--text2)'}"></div>
         <div class="exc-info"><div class="exc-title">${e.title}</div><div class="exc-desc">${e.description||''}</div></div>
         ${severityBadge(e.severity)}
         <div class="exc-time">${timeAgo(e.raised_at)}</div>
-      </div>`).join('') || '<div class="loading">No critical exceptions</div>';
+      </div>`).join('') : '<div class="loading">No critical exceptions</div>';
   }
 
-  // NAV Chart
   const days = Array.from({length:90},(_,i)=>{const d=new Date('2025-12-19');d.setDate(d.getDate()+i);return d.toLocaleDateString('en-US',{month:'short',day:'numeric'})});
   const rand=(b,v)=>Array.from({length:90},(_,i)=>+(b+Math.sin(i*.18)*v*2+(Math.random()-.45)*v+i*v*.015).toFixed(2));
   const existing = Chart.getChart('navChart');
@@ -491,7 +533,7 @@ async function loadDashboard() {
     {data:rand(44,1.8),borderColor:'#2e86ff',borderWidth:1.5,pointRadius:0,tension:.4},
     {data:rand(30,1.1),borderColor:'#8b7fff',borderWidth:1.5,pointRadius:0,tension:.4},
     {data:rand(21,.9),borderColor:'#00d68f',borderWidth:1.5,pointRadius:0,tension:.4}
-  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#1c2230',borderColor:'#2a3850',borderWidth:1,titleColor:'#9aafc8',bodyColor:'#e8edf5',titleFont:{family:'IBM Plex Mono',size:11},bodyFont:{family:'IBM Plex Mono',size:12}}},scales:{x:{ticks:{color:'#5a7090',font:{family:'IBM Plex Mono',size:10},maxTicksLimit:6},grid:{color:'#1e2a3a'},border:{color:'#1e2a3a'}},y:{ticks:{color:'#5a7090',font:{family:'IBM Plex Mono',size:10}},grid:{color:'#1e2a3a'},border:{color:'#1e2a3a'}}}}});
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#5a7090',font:{family:'IBM Plex Mono',size:10},maxTicksLimit:6},grid:{color:'#1e2a3a'},border:{color:'#1e2a3a'}},y:{ticks:{color:'#5a7090',font:{family:'IBM Plex Mono',size:10}},grid:{color:'#1e2a3a'},border:{color:'#1e2a3a'}}}}});
 }
 
 // ─── Filings ───────────────────────────────────────────────
@@ -501,39 +543,57 @@ async function loadFilings() {
   renderFilings(allFilings);
 }
 function renderFilings(list) {
-  document.getElementById('filings-table').innerHTML = list.map(f => `
+  document.getElementById('filings-table').innerHTML = list.length ? list.map(f => `
     <tr>
       <td class="mono">${f.form_type}</td>
       <td>${f.description||'—'}</td>
       <td>${f.fund?`<span class="badge badge-blue">${f.fund.ticker}</span>`:'<span class="badge badge-gray">All</span>'}</td>
       <td>${statusBadge(f.status)}</td>
       <td>${f.assignee||'Unassigned'}</td>
-      <td class="mono" style="color:${new Date(f.due_date)<new Date()?'var(--red)':'var(--amber)'}">${f.due_date||'TBD'}</td>
+      <td class="mono" style="color:${f.due_date && new Date(f.due_date)<new Date()?'var(--red)':'var(--amber)'}">${f.due_date||'TBD'}</td>
       <td>${statusBadge(f.edgar_status)}</td>
       <td style="display:flex;gap:6px">
         <button class="btn" onclick="openModal('aiReview')">AI Review</button>
         ${f.status==='pending_approval'?`<button class="btn btn-primary" onclick="currentFilingId=${f.id};openModal('approve')">Approve</button>`:''}
       </td>
-    </tr>`).join('');
+    </tr>`).join('') : '<tr><td colspan="8" class="loading">No filings found</td></tr>';
 }
 function filterFilings() {
   const q = document.getElementById('filing-search').value.toLowerCase();
   renderFilings(allFilings.filter(f => (f.form_type+f.description+f.assignee).toLowerCase().includes(q)));
 }
 async function submitFiling() {
-  const data = {form_type:document.getElementById('f-type').value, fund_id:parseInt(document.getElementById('f-fund').value), description:document.getElementById('f-desc').value, assignee:document.getElementById('f-assignee').value, due_date:document.getElementById('f-due').value||null, notes:document.getElementById('f-notes').value};
-  await api('/filings/', {method:'POST',body:JSON.stringify(data)});
-  closeModal('newFiling');
-  await loadFilings();
-  await loadDashboard();
+  const desc = document.getElementById('f-desc').value;
+  if (!desc) { showToast('Please add a description', 'error'); return; }
+  const data = {
+    form_type: document.getElementById('f-type').value,
+    fund_id: parseInt(document.getElementById('f-fund').value),
+    description: desc,
+    assignee: document.getElementById('f-assignee').value,
+    due_date: document.getElementById('f-due').value || null,
+    notes: document.getElementById('f-notes').value
+  };
+  const result = await api('/filings/', {method:'POST', body:JSON.stringify(data)});
+  if (result) {
+    closeModal('newFiling');
+    showToast('Filing created successfully!');
+    document.getElementById('f-desc').value = '';
+    document.getElementById('f-notes').value = '';
+    await loadFilings();
+    await loadDashboard();
+  }
 }
 async function submitApproval() {
   const notes = document.getElementById('approve-notes').value;
-  if (!notes) { alert('Please add approval notes'); return; }
-  await api(`/filings/${currentFilingId}/approve?approver=Alex+Rivera&notes=${encodeURIComponent(notes)}`, {method:'POST'});
-  closeModal('approve');
-  await loadFilings();
-  await loadAudit();
+  if (!notes) { showToast('Please add approval notes', 'error'); return; }
+  const result = await api(`/filings/${currentFilingId}/approve?approver=Alex+Rivera&notes=${encodeURIComponent(notes)}`, {method:'POST'});
+  if (result) {
+    closeModal('approve');
+    showToast('Filing approved!');
+    document.getElementById('approve-notes').value = '';
+    await loadFilings();
+    await loadAudit();
+  }
 }
 
 // ─── Workflows ─────────────────────────────────────────────
@@ -543,7 +603,6 @@ async function loadWorkflows() {
     document.getElementById('workflows-content').innerHTML = '<div class="loading">No active workflows. Create a filing to start a workflow.</div>';
     return;
   }
-  const statusColor = {needs_action:'var(--red)',in_progress:'var(--amber)',complete:'var(--green)'};
   document.getElementById('workflows-content').innerHTML = `<div class="three-col">${workflows.map(w => `
     <div class="panel">
       <div class="panel-head"><div class="panel-title">${w.name}</div>${statusBadge(w.status)}</div>
@@ -553,7 +612,7 @@ async function loadWorkflows() {
           <span style="font-size:10px;font-family:var(--mono);color:var(--text2)">${w.current_step}/${w.total_steps}</span>
         </div>
         ${(w.steps||[]).map(s=>`<div class="check-item" style="padding:6px 0">
-          <div style="width:16px;height:16px;border-radius:3px;border:1px solid ${s.status==='complete'?'var(--green2)':s.status==='pending'?'var(--amber)':'var(--border2)'};background:${s.status==='complete'?'var(--green2)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:white">${s.status==='complete'?'✓':''}</div>
+          <div style="width:16px;height:16px;border-radius:3px;border:1px solid ${s.status==='complete'?'var(--green2)':'var(--border2)'};background:${s.status==='complete'?'var(--green2)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:white">${s.status==='complete'?'✓':''}</div>
           <div style="flex:1"><div class="check-text ${s.status==='complete'?'done':''}">${s.title}</div>${s.assignee?`<div class="check-owner">${s.assignee}</div>`:''}</div>
         </div>`).join('')}
         <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
@@ -567,7 +626,7 @@ async function loadWorkflows() {
 async function loadAudit() {
   const logs = await api('/audit/?limit=50') || [];
   const typeColor = {APPROVE:'badge-green',FILED:'badge-blue',FLAG:'badge-red',UPDATE:'badge-amber',INGEST:'badge-blue',CREATE:'badge-purple',RESOLVE:'badge-green'};
-  document.getElementById('audit-table').innerHTML = logs.map(l => `
+  document.getElementById('audit-table').innerHTML = logs.length ? logs.map(l => `
     <tr>
       <td class="mono" style="font-size:11px">${new Date(l.timestamp).toLocaleString()}</td>
       <td><span class="badge ${typeColor[l.event_type]||'badge-gray'}">${l.event_type}</span></td>
@@ -576,7 +635,7 @@ async function loadAudit() {
       <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.action}</td>
       <td>${l.evidence_ref?`<span class="badge badge-blue">${l.evidence_ref}</span>`:'—'}</td>
       <td class="mono" style="color:var(--text2);font-size:11px">${l.ip_address||'—'}</td>
-    </tr>`).join('');
+    </tr>`).join('') : '<tr><td colspan="7" class="loading">No audit logs</td></tr>';
 }
 
 // ─── Pipelines ─────────────────────────────────────────────
@@ -605,26 +664,31 @@ async function loadPipelines() {
 
 // ─── Funds ─────────────────────────────────────────────────
 async function loadFunds() {
-  const [funds] = await Promise.all([api('/funds/')]);
+  const funds = await api('/funds/');
   if (funds) {
     document.getElementById('fund-stats').innerHTML = funds.map(f => `
       <div class="stat-card"><div class="stat-label">${f.ticker} AUM</div><div class="stat-value">${fmtMoney(f.aum)}</div><div class="stat-delta delta-up">↑ +$${Math.floor(Math.random()*50+10)}M MTD</div></div>
     `).join('') + `<div class="stat-card"><div class="stat-label">Total Funds</div><div class="stat-value">${funds.length}</div><div class="stat-delta">All trading</div></div>`;
-    // load holdings for first fund
-    const holdings = await api('/funds/1/holdings') || [];
-    const reconColor = {ok:'green',price_break:'red',corp_action:'amber'};
-    document.getElementById('holdings-table').innerHTML = holdings.map(h => `
-      <tr>
-        <td class="mono" style="color:${h.recon_status==='price_break'?'var(--red)':'var(--accent)'}">${h.ticker}</td>
-        <td>${h.name}</td>
-        <td class="mono" style="font-size:11px;color:var(--text2)">${h.isin}</td>
-        <td class="mono">${h.weight?.toFixed(2)}%</td>
-        <td class="mono">${h.shares?.toLocaleString()}</td>
-        <td class="mono">$${h.price?.toFixed(2)}</td>
-        <td class="mono">$${(h.market_value/1e6).toFixed(1)}M</td>
-        <td><span class="badge badge-${reconColor[h.recon_status]||'gray'}">${h.recon_status==='ok'?'✓':h.recon_status?.replace('_',' ')}</span></td>
-      </tr>`).join('');
   }
+  await loadHoldingsForFund();
+}
+
+// FIX: dynamic fund selector instead of hardcoded fund id=1
+async function loadHoldingsForFund() {
+  const fundId = document.getElementById('fund-selector')?.value || '1';
+  const holdings = await api(`/funds/${fundId}/holdings`) || [];
+  const reconColor = {ok:'green', price_break:'red', corp_action:'amber'};
+  document.getElementById('holdings-table').innerHTML = holdings.length ? holdings.map(h => `
+    <tr>
+      <td class="mono" style="color:${h.recon_status==='price_break'?'var(--red)':'var(--accent)'}">${h.ticker}</td>
+      <td>${h.name}</td>
+      <td class="mono" style="font-size:11px;color:var(--text2)">${h.isin}</td>
+      <td class="mono">${h.weight?.toFixed(2)}%</td>
+      <td class="mono">${h.shares?.toLocaleString()}</td>
+      <td class="mono">$${h.price?.toFixed(2)}</td>
+      <td class="mono">$${(h.market_value/1e6).toFixed(1)}M</td>
+      <td><span class="badge badge-${reconColor[h.recon_status]||'gray'}">${h.recon_status==='ok'?'✓':h.recon_status?.replace('_',' ')}</span></td>
+    </tr>`).join('') : '<tr><td colspan="8" class="loading">No holdings for this fund</td></tr>';
 }
 
 // ─── Exceptions ────────────────────────────────────────────
@@ -632,8 +696,9 @@ async function loadExceptions() {
   const exceptions = await api('/exceptions/') || [];
   const open = exceptions.filter(e => e.status === 'open');
   document.getElementById('exc-count').textContent = `${open.length} open · ${exceptions.filter(e=>e.severity==='CRITICAL'&&e.status==='open').length} critical`;
-  const sev = {CRITICAL:'var(--red)',HIGH:'var(--amber)',MEDIUM:'var(--accent)',LOW:'var(--text2)'};
-  document.getElementById('exceptions-table').innerHTML = exceptions.map(e => `
+  document.getElementById('badge-exceptions').textContent = open.length;
+
+  document.getElementById('exceptions-table').innerHTML = exceptions.length ? exceptions.map(e => `
     <tr>
       <td>${severityBadge(e.severity)}</td>
       <td>${e.category}</td>
@@ -642,18 +707,38 @@ async function loadExceptions() {
       <td class="mono" style="font-size:11px">${timeAgo(e.raised_at)}</td>
       <td>${e.assignee||'<span style="color:var(--text2)">Unassigned</span>'}</td>
       <td>${statusBadge(e.status)}</td>
-      <td><button class="btn" onclick="resolveException(${e.id})">${e.status==='open'?'Resolve':'View'}</button></td>
-    </tr>`).join('');
+      <td>
+        ${e.status==='open'
+          ? `<button class="btn btn-danger" onclick="openResolveModal(${e.id})">Resolve</button>`
+          : `<span class="badge badge-gray">Closed</span>`
+        }
+      </td>
+    </tr>`).join('') : '<tr><td colspan="8" class="loading">No exceptions</td></tr>';
 }
-async function resolveException(id) {
-  await api(`/exceptions/${id}/resolve?actor=Alex+Rivera&notes=Resolved+via+dashboard`, {method:'POST'});
-  await loadExceptions();
-  await loadDashboard();
+
+// FIX: resolve exception via modal instead of instant click
+function openResolveModal(id) {
+  currentExcId = id;
+  document.getElementById('resolve-notes').value = '';
+  openModal('resolveExc');
+}
+
+async function submitResolve() {
+  const notes = document.getElementById('resolve-notes').value;
+  if (!notes) { showToast('Please add resolution notes', 'error'); return; }
+  const result = await api(`/exceptions/${currentExcId}/resolve?actor=Alex+Rivera&notes=${encodeURIComponent(notes)}`, {method:'POST'});
+  if (result) {
+    closeModal('resolveExc');
+    showToast('Exception resolved!');
+    await loadExceptions();
+    await loadDashboard();
+  }
 }
 
 // ─── AI Review ─────────────────────────────────────────────
 async function runAIReview() {
   const text = document.getElementById('review-text').value;
+  if (!text) { showToast('Please enter disclosure text', 'error'); return; }
   const btn = document.getElementById('ai-btn');
   const result = document.getElementById('ai-result');
   btn.disabled = true; btn.textContent = 'Analyzing...';
