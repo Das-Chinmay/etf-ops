@@ -66,7 +66,7 @@ class AuditLog(Base):
     action = Column(Text, nullable=False)
     evidence_ref = Column(String(100))
     ip_address = Column(String(45))
-    metadata = Column(JSONB)
+    extra_metadata = Column(JSONB)
 
 class Exception(Base):
     __tablename__ = "exceptions"
