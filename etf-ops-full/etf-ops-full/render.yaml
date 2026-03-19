@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: etf-ops-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        sync: false        # you paste this manually (from Supabase)
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: LLM_API_KEY
+        sync: false        # you paste this manually (your Gemini key)
+      - key: SECRET_KEY
+        generateValue: true
+
+  - type: web
+    name: etf-ops-frontend
+    runtime: static
+    rootDir: frontend
+    staticPublishPath: .
+    envVars:
+      - key: BACKEND_URL
+        fromService:
+          name: etf-ops-backend
+          type: web
+          property: host

@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Corgi ETF Ops</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg0:#0a0c0f;--bg1:#0f1217;--bg2:#151921;--bg3:#1c2230;--bg4:#242d3d;--border:#1e2a3a;--border2:#2a3850;--text0:#e8edf5;--text1:#9aafc8;--text2:#5a7090;--accent:#2e86ff;--accent2:#1a6bde;--green:#00d68f;--green2:#00a870;--red:#ff4d6a;--amber:#f5a623;--purple:#8b7fff;--teal:#00c9c8;--mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--bg0);color:var(--text0);font-family:var(--sans);font-size:13px;line-height:1.5}
+::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-track{background:var(--bg1)}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.layout{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:220px;flex-shrink:0;background:var(--bg1);border-right:1px solid var(--border);display:flex;flex-direction:column}
+.main{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+.topbar{height:48px;background:var(--bg1);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 1.5rem;gap:1rem;flex-shrink:0}
+.content{flex:1;padding:1.5rem}
+.sidebar-logo{padding:1.25rem 1rem;border-bottom:1px solid var(--border)}
+.logo-mark{font-family:var(--mono);font-size:16px;font-weight:500;color:var(--text0);letter-spacing:-0.5px}
+.logo-sub{font-size:10px;color:var(--text2);letter-spacing:2px;text-transform:uppercase;margin-top:2px;font-family:var(--mono)}
+.sidebar-section{padding:.75rem 0;border-bottom:1px solid var(--border)}
+.sidebar-label{font-size:9px;letter-spacing:2.5px;text-transform:uppercase;color:var(--text2);padding:0 1rem;margin-bottom:.4rem;font-family:var(--mono)}
+.nav-item{display:flex;align-items:center;gap:10px;padding:7px 1rem;cursor:pointer;color:var(--text1);font-size:12.5px;transition:all .15s;border-left:2px solid transparent}
+.nav-item:hover{color:var(--text0);background:var(--bg2)}
+.nav-item.active{color:var(--text0);background:var(--bg2);border-left-color:var(--accent)}
+.nav-icon{width:14px;height:14px;flex-shrink:0}
+.nav-badge{margin-left:auto;background:var(--red);color:white;font-size:9px;padding:1px 5px;border-radius:8px;font-family:var(--mono)}
+.nav-badge.amber{background:var(--amber);color:#000}
+.nav-badge.green{background:var(--green2)}
+.sidebar-bottom{margin-top:auto;padding:1rem;border-top:1px solid var(--border)}
+.avatar{width:28px;height:28px;background:var(--accent2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;color:white;flex-shrink:0}
+.ticker{display:flex;gap:1.5rem;align-items:center}
+.ticker-item{display:flex;flex-direction:column;gap:1px}
+.ticker-sym{font-size:10px;font-family:var(--mono);color:var(--text2);letter-spacing:1px}
+.ticker-val{font-size:12px;font-family:var(--mono);color:var(--text0)}
+.ticker-chg{font-size:10px;font-family:var(--mono)}
+.sep{width:1px;height:24px;background:var(--border)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;display:inline-block}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:1.5rem}
+.stat-card{background:var(--bg1);padding:1rem 1.25rem}
+.stat-label{font-size:10px;color:var(--text2);letter-spacing:1.5px;text-transform:uppercase;font-family:var(--mono);margin-bottom:6px}
+.stat-value{font-size:24px;font-weight:300;color:var(--text0);font-family:var(--mono);letter-spacing:-1px}
+.stat-delta{font-size:11px;margin-top:4px;font-family:var(--mono)}
+.delta-up{color:var(--green)}.delta-down{color:var(--red)}.delta-warn{color:var(--amber)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem}
+.three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.5rem;margin-bottom:1.5rem}
+.panel{background:var(--bg1);border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.panel-head{padding:.75rem 1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.panel-title{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--text2);font-family:var(--mono)}
+.panel-body{padding:1rem}
+.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.section-title{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text2);font-family:var(--mono)}
+.btn{padding:5px 12px;border-radius:4px;font-size:11px;cursor:pointer;font-family:var(--mono);border:1px solid var(--border2);background:var(--bg2);color:var(--text1);transition:all .15s}
+.btn:hover{background:var(--bg3);color:var(--text0);border-color:var(--accent)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-primary{background:var(--accent);border-color:var(--accent);color:white}
+.btn-primary:hover{background:var(--accent2);border-color:var(--accent2);color:white}
+.btn-danger{border-color:var(--red);color:var(--red)}
+.btn-danger:hover{background:rgba(255,77,106,.1)}
+.table-wrap{background:var(--bg1);border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:1.5rem}
+table{width:100%;border-collapse:collapse}
+thead th{padding:8px 1rem;text-align:left;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);font-family:var(--mono);border-bottom:1px solid var(--border);font-weight:400}
+tbody td{padding:9px 1rem;border-bottom:1px solid var(--border);color:var(--text1);vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:var(--bg2);color:var(--text0)}
+.mono{font-family:var(--mono)}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:3px;font-size:10px;font-family:var(--mono);font-weight:500;letter-spacing:.5px}
+.badge-green{background:rgba(0,214,143,.12);color:var(--green)}
+.badge-red{background:rgba(255,77,106,.12);color:var(--red)}
+.badge-amber{background:rgba(245,166,35,.12);color:var(--amber)}
+.badge-blue{background:rgba(46,134,255,.12);color:var(--accent)}
+.badge-purple{background:rgba(139,127,255,.12);color:var(--purple)}
+.badge-gray{background:var(--bg3);color:var(--text2)}
+.audit-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.audit-item:last-child{border-bottom:none}
+.audit-icon{width:28px;height:28px;border-radius:4px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:12px}
+.audit-icon.approved{background:rgba(0,214,143,.15)}
+.audit-icon.filed{background:rgba(46,134,255,.15)}
+.audit-icon.flagged{background:rgba(255,77,106,.15)}
+.audit-icon.updated{background:rgba(245,166,35,.15)}
+.audit-action{font-size:12.5px;color:var(--text1)}
+.audit-action strong{color:var(--text0);font-weight:500}
+.audit-meta{font-size:11px;color:var(--text2);font-family:var(--mono);margin-top:2px}
+.progress-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.progress-label{font-size:11px;color:var(--text1);width:130px;flex-shrink:0}
+.progress-bar{flex:1;height:4px;background:var(--bg3);border-radius:2px;overflow:hidden}
+.progress-fill{height:100%;border-radius:2px}
+.progress-pct{font-size:11px;color:var(--text2);font-family:var(--mono);width:32px;text-align:right}
+.exception-item{padding:10px 1rem;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;cursor:pointer;transition:background .12s}
+.exception-item:hover{background:var(--bg2)}
+.exception-item:last-child{border-bottom:none}
+.exc-severity{width:3px;height:36px;border-radius:2px;flex-shrink:0}
+.exc-info{flex:1}
+.exc-title{font-size:12.5px;color:var(--text0)}
+.exc-desc{font-size:11px;color:var(--text2);font-family:var(--mono);margin-top:2px}
+.exc-time{font-size:10px;color:var(--text2);font-family:var(--mono)}
+.chart-wrap{position:relative;height:160px}
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:1.5rem}
+.tab{padding:8px 16px;font-size:12px;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;font-family:var(--mono);transition:all .15s}
+.tab:hover{color:var(--text1)}
+.tab.active{color:var(--text0);border-bottom-color:var(--accent)}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;align-items:center;justify-content:center}
+.modal-bg.open{display:flex}
+.modal{background:var(--bg1);border:1px solid var(--border2);border-radius:8px;width:580px;max-height:85vh;overflow-y:auto}
+.modal-header{padding:1.25rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.modal-title{font-size:14px;font-weight:500;color:var(--text0)}
+.modal-close{background:none;border:none;color:var(--text2);cursor:pointer;font-size:20px;line-height:1}
+.modal-body{padding:1.5rem}
+.modal-footer{padding:1rem 1.5rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
+.form-group{margin-bottom:1rem}
+.form-label{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);font-family:var(--mono);display:block;margin-bottom:6px}
+.form-input{width:100%;background:var(--bg2);border:1px solid var(--border2);border-radius:4px;padding:7px 10px;color:var(--text0);font-family:var(--mono);font-size:12px;outline:none}
+.form-input:focus{border-color:var(--accent)}
+.form-select{width:100%;background:var(--bg2);border:1px solid var(--border2);border-radius:4px;padding:7px 10px;color:var(--text0);font-family:var(--mono);font-size:12px;outline:none}
+textarea.form-input{height:90px;resize:vertical}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.ai-response{background:var(--bg2);border:1px solid var(--border2);border-radius:4px;padding:1rem;font-size:12px;color:var(--text1);line-height:1.8;font-family:var(--mono);min-height:80px;white-space:pre-wrap}
+.page{display:none}
+.page.active{display:block;animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.loading{color:var(--text2);font-style:italic;font-family:var(--mono);font-size:12px;padding:2rem;text-align:center}
+.search-bar{background:var(--bg2);border:1px solid var(--border);border-radius:4px;padding:6px 12px;display:flex;align-items:center;gap:8px}
+.search-bar input{background:none;border:none;outline:none;color:var(--text0);font-family:var(--mono);font-size:12px;width:180px}
+.search-bar input::placeholder{color:var(--text2)}
+.info-box{background:rgba(46,134,255,.07);border:1px solid rgba(46,134,255,.2);border-radius:4px;padding:.75rem;font-size:11px;color:var(--text2);font-family:var(--mono);line-height:1.6}
+.check-item{display:flex;align-items:flex-start;gap:10px;padding:10px 1rem;border-bottom:1px solid var(--border)}
+.check-item:last-child{border-bottom:none}
+.check-text{font-size:12px;color:var(--text1);flex:1}
+.check-text.done{color:var(--text2);text-decoration:line-through}
+.check-owner{font-size:10px;color:var(--text2);font-family:var(--mono);margin-top:2px}
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-mark">CORGI ETF</div>
+      <div class="logo-sub">OPS PLATFORM</div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Overview</div>
+      <div class="nav-item active" onclick="nav('dashboard',this)">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+        Dashboard
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Compliance</div>
+      <div class="nav-item" onclick="nav('filings',this)">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2h7l3 3v9H3V2z"/><path d="M10 2v3h3M5 7h6M5 10h4"/></svg>
+        SEC Filings <span class="nav-badge" id="badge-filings">-</span>
+      </div>
+      <div class="nav-item" onclick="nav('workflows',this)">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="3" cy="8" r="2"/><circle cx="13" cy="3" r="2"/><circle cx="13" cy="13" r="2"/><path d="M5 8h4l4-5M5 8h4l4 5"/></svg>
+        Workflows
+      </div>
+      <div class="nav-item" onclick="nav('audit',this)">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1v6l4 2"/><circle cx="8" cy="9" r="6"/></svg>
+        Audit Log
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Data</div>
+      <div class="nav-item" onclick="nav('pipelines',this)">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h12M2 12h12"/><circle cx="5" cy="4" r="1.5" fill="currentColor" stroke="none"/><circle cx="11" cy="8" r="1.5" fill="currentColor" stroke="none"/><circle cx="7" cy="12" r="1.5" fill="currentColor" stroke="none"/></svg>
+        Pipelines
+      </div>
+      <div class="nav-item" onclick="nav('funds',this)">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12L6 7l3 3 2-4 3 4"/><rect x="1" y="1" width="14" height="14" rx="2"/></svg>
+        Fund Data
+      </div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Exceptions</div>
+      <div class="nav-item" onclick="nav('exceptions',this)">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1L15 14H1L8 1z"/><path d="M8 6v4M8 11.5v.5"/></svg>
+        Exception Queue <span class="nav-badge" id="badge-exceptions">-</span>
+      </div>
+    </div>
+    <div class="sidebar-bottom">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="avatar">AR</div>
+        <div>
+          <div style="font-size:12px;color:var(--text1)">Alex Rivera</div>
+          <div style="font-size:10px;color:var(--text2)">Head of Compliance</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="ticker" id="ticker"><div class="loading" style="padding:0">Loading...</div></div>
+      <div style="flex:1"></div>
+      <div style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text1);font-family:var(--mono)"><div class="dot"></div>Live · NYSE</div>
+      <button class="btn btn-primary" onclick="openModal('newFiling')">+ New Filing</button>
+    </div>
+
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div class="page active" id="page-dashboard">
+        <div class="stat-grid" id="stats-grid"><div class="stat-card" style="grid-column:span 4"><div class="loading">Loading stats...</div></div></div>
+        <div class="two-col">
+          <div class="panel">
+            <div class="panel-head"><div class="panel-title">Filing Calendar</div><button class="btn" onclick="nav('filings',null)">View all</button></div>
+            <div id="filing-calendar"><div class="loading">Loading...</div></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><div class="panel-title">Audit Feed</div><span style="font-size:10px;color:var(--text2);font-family:var(--mono)">Live</span></div>
+            <div style="padding:0 1rem" id="audit-feed"><div class="loading">Loading...</div></div>
+          </div>
+        </div>
+        <div class="two-col">
+          <div class="panel">
+            <div class="panel-head">
+              <div class="panel-title">NAV Performance — 90d</div>
+              <div style="display:flex;gap:8px"><span class="badge badge-blue">CRGX</span><span class="badge badge-purple">CRGB</span><span class="badge badge-green">CRGG</span></div>
+            </div>
+            <div class="panel-body"><div class="chart-wrap"><canvas id="navChart"></canvas></div></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><div class="panel-title">Control Health</div></div>
+            <div class="panel-body">
+              <div class="progress-row"><div class="progress-label">Filing timeliness</div><div class="progress-bar"><div class="progress-fill" style="width:100%;background:var(--green)"></div></div><div class="progress-pct">100%</div></div>
+              <div class="progress-row"><div class="progress-label">Holdings recon</div><div class="progress-bar"><div class="progress-fill" style="width:96%;background:var(--green)"></div></div><div class="progress-pct">96%</div></div>
+              <div class="progress-row"><div class="progress-label">Price validation</div><div class="progress-bar"><div class="progress-fill" style="width:87%;background:var(--amber)"></div></div><div class="progress-pct">87%</div></div>
+              <div class="progress-row"><div class="progress-label">Disclosure QA</div><div class="progress-bar"><div class="progress-fill" style="width:92%;background:var(--green)"></div></div><div class="progress-pct">92%</div></div>
+              <div class="progress-row"><div class="progress-label">Vendor SLA</div><div class="progress-bar"><div class="progress-fill" style="width:78%;background:var(--amber)"></div></div><div class="progress-pct">78%</div></div>
+              <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)">
+                <div class="progress-row" style="margin:0"><div class="progress-label" style="color:var(--text0);font-weight:500">Overall Score</div><div class="progress-bar"><div class="progress-fill" style="width:91%;background:linear-gradient(90deg,var(--accent),var(--green))"></div></div><div class="progress-pct" style="color:var(--text0)">91%</div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="panel" style="margin-bottom:1.5rem">
+          <div class="panel-head"><div class="panel-title">Exception Queue — Critical</div><button class="btn" onclick="nav('exceptions',null)">View all</button></div>
+          <div id="critical-exceptions"><div class="loading">Loading...</div></div>
+        </div>
+      </div>
+
+      <!-- FILINGS -->
+      <div class="page" id="page-filings">
+        <div class="section-header">
+          <div class="section-title">SEC Filings</div>
+          <div style="display:flex;gap:8px">
+            <div class="search-bar"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="var(--text2)" stroke-width="1.5"><circle cx="7" cy="7" r="5"/><path d="M10 10l3 3"/></svg><input id="filing-search" placeholder="Search filings..." oninput="filterFilings()"/></div>
+            <button class="btn btn-primary" onclick="openModal('newFiling')">+ New Filing</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Form</th><th>Description</th><th>Fund</th><th>Status</th><th>Assignee</th><th>Due Date</th><th>EDGAR</th><th>Actions</th></tr></thead>
+          <tbody id="filings-table"><tr><td colspan="8" class="loading">Loading...</td></tr></tbody></table>
+        </div>
+      </div>
+
+      <!-- WORKFLOWS -->
+      <div class="page" id="page-workflows">
+        <div class="section-header"><div class="section-title">Compliance Workflows</div></div>
+        <div id="workflows-content"><div class="loading">Loading...</div></div>
+      </div>
+
+      <!-- AUDIT LOG -->
+      <div class="page" id="page-audit">
+        <div class="section-header">
+          <div class="section-title">Audit Log</div>
+          <button class="btn">Export CSV</button>
+        </div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Timestamp</th><th>Event</th><th>Actor</th><th>Resource</th><th>Action</th><th>Evidence</th><th>IP</th></tr></thead>
+          <tbody id="audit-table"><tr><td colspan="7" class="loading">Loading...</td></tr></tbody></table>
+        </div>
+      </div>
+
+      <!-- PIPELINES -->
+      <div class="page" id="page-pipelines">
+        <div class="section-header"><div class="section-title">Data Pipelines</div></div>
+        <div class="stat-grid" style="grid-template-columns:repeat(3,1fr)" id="pipeline-stats"><div class="stat-card" style="grid-column:span 3"><div class="loading">Loading...</div></div></div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Vendor</th><th>Type</th><th>Method</th><th>Last Run</th><th>Status</th><th>Rows</th><th>Exceptions</th><th>SLA</th></tr></thead>
+          <tbody id="pipelines-table"><tr><td colspan="8" class="loading">Loading...</td></tr></tbody></table>
+        </div>
+      </div>
+
+      <!-- FUNDS -->
+      <div class="page" id="page-funds">
+        <div class="section-header"><div class="section-title">Fund Source of Truth</div><span style="font-size:11px;color:var(--text2);font-family:var(--mono)">Live from DB</span></div>
+        <div class="stat-grid" id="fund-stats"><div class="stat-card" style="grid-column:span 4"><div class="loading">Loading...</div></div></div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Ticker</th><th>Name</th><th>ISIN</th><th>Weight</th><th>Shares</th><th>Price</th><th>Market Value</th><th>Recon</th></tr></thead>
+          <tbody id="holdings-table"><tr><td colspan="8" class="loading">Loading...</td></tr></tbody></table>
+        </div>
+      </div>
+
+      <!-- EXCEPTIONS -->
+      <div class="page" id="page-exceptions">
+        <div class="section-header">
+          <div class="section-title">Exception Queue</div>
+          <span id="exc-count" style="font-size:11px;color:var(--red);font-family:var(--mono)">Loading...</span>
+        </div>
+        <div class="table-wrap">
+          <table><thead><tr><th>Severity</th><th>Category</th><th>Description</th><th>Fund</th><th>Raised</th><th>Assignee</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="exceptions-table"><tr><td colspan="8" class="loading">Loading...</td></tr></tbody></table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: New Filing -->
+<div class="modal-bg" id="modal-newFiling" onclick="if(event.target===this)closeModal('newFiling')">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Create New Filing</div><button class="modal-close" onclick="closeModal('newFiling')">×</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Form Type</label><select class="form-select" id="f-type"><option>N-PORT</option><option>N-CEN</option><option>485BPOS</option><option>497</option><option>N-2</option><option>DEF 14A</option></select></div>
+        <div class="form-group"><label class="form-label">Fund</label><select class="form-select" id="f-fund"><option value="1">CRGX — Corgi Growth ETF</option><option value="2">CRGB — Corgi Bond ETF</option><option value="3">CRGG — Corgi Global ETF</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Due Date</label><input class="form-input" type="date" id="f-due"/></div>
+        <div class="form-group"><label class="form-label">Assignee</label><select class="form-select" id="f-assignee"><option>Alex Rivera</option><option>Sarah Chen</option><option>Marcus Lee</option></select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Description</label><input class="form-input" id="f-desc" placeholder="Brief description of this filing..."/></div>
+      <div class="form-group"><label class="form-label">Notes</label><textarea class="form-input" id="f-notes" placeholder="Context, dependencies, special instructions..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('newFiling')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitFiling()">Create Filing</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: AI Review -->
+<div class="modal-bg" id="modal-aiReview" onclick="if(event.target===this)closeModal('aiReview')">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">AI Compliance Review</div><button class="modal-close" onclick="closeModal('aiReview')">×</button></div>
+    <div class="modal-body">
+      <div class="form-group"><label class="form-label">Disclosure Text</label><textarea class="form-input" id="review-text" style="height:120px">The Fund invests at least 80% of its net assets in equity securities of U.S. companies with market capitalizations greater than $1 billion at the time of purchase. The Fund's portfolio consists of 847 positions as of the reporting date, with a weighted average market cap of $284 billion.</textarea></div>
+      <div class="form-group"><label class="form-label">AI Analysis</label><div class="ai-response" id="ai-result">Click "Run AI Review" to analyze this disclosure for SEC compliance issues...</div></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('aiReview')">Close</button>
+      <button class="btn btn-primary" id="ai-btn" onclick="runAIReview()">Run AI Review</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Approve Filing -->
+<div class="modal-bg" id="modal-approve" onclick="if(event.target===this)closeModal('approve')">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title">Approve Filing</div><button class="modal-close" onclick="closeModal('approve')">×</button></div>
+    <div class="modal-body">
+      <div class="info-box" style="margin-bottom:1rem">You are approving this filing as CCO. Your approval will be permanently recorded in the audit log with timestamp and IP address per SEC Rule 17a-4.</div>
+      <div class="form-group"><label class="form-label">Approval Notes (Required)</label><textarea class="form-input" id="approve-notes" placeholder="Document your rationale. This is captured as evidence."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('approve')">Cancel</button>
+      <button class="btn btn-danger">Reject</button>
+      <button class="btn btn-primary" onclick="submitApproval()">Approve & Sign</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:8000/api'
+  : '/api';
+
+// ─── API helpers ───────────────────────────────────────────
+async function api(path, opts={}) {
+  try {
+    const r = await fetch(API + path, { headers: {'Content-Type':'application/json'}, ...opts });
+    if (!r.ok) throw new Error(await r.text());
+    return await r.json();
+  } catch(e) { console.error('API error', path, e); return null; }
+}
+
+// ─── Navigation ────────────────────────────────────────────
+function nav(page, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (el) el.classList.add('active');
+  else document.querySelector(`.nav-item[onclick*="${page}"]`)?.classList.add('active');
+  loaders[page]?.();
+}
+
+// ─── Modals ────────────────────────────────────────────────
+let currentFilingId = null;
+function openModal(id) { document.getElementById('modal-'+id).classList.add('open'); }
+function closeModal(id) { document.getElementById('modal-'+id).classList.remove('open'); }
+
+// ─── Badges ────────────────────────────────────────────────
+function statusBadge(s) {
+  const map = {filed:'green',accepted:'green',complete:'green',in_review:'amber',in_progress:'blue',pending_approval:'amber',not_started:'gray',draft:'gray',ixbrl_needed:'amber',not_submitted:'gray',open:'red',in_review2:'amber',resolved:'green',scheduled:'blue',delayed:'amber',ok:'green',price_break:'red',corp_action:'amber'};
+  const label = s?.replace(/_/g,' ') || '—';
+  const cls = map[s] || 'gray';
+  return `<span class="badge badge-${cls}">${label}</span>`;
+}
+function severityBadge(s) {
+  const map = {CRITICAL:'red',HIGH:'amber',MEDIUM:'blue',LOW:'gray'};
+  return `<span class="badge badge-${map[s]||'gray'}">${s}</span>`;
+}
+function timeAgo(ts) {
+  if (!ts) return '—';
+  const diff = Date.now() - new Date(ts);
+  const m = Math.floor(diff/60000);
+  if (m < 60) return `${m}m ago`;
+  if (m < 1440) return `${Math.floor(m/60)}h ago`;
+  return `${Math.floor(m/1440)}d ago`;
+}
+function fmtMoney(n) {
+  if (!n) return '$0';
+  if (n >= 1e9) return '$' + (n/1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return '$' + (n/1e6).toFixed(0) + 'M';
+  return '$' + n.toLocaleString();
+}
+
+// ─── Dashboard ─────────────────────────────────────────────
+async function loadDashboard() {
+  const [stats, filings, auditData, exceptions, funds] = await Promise.all([
+    api('/funds/stats'), api('/filings/'), api('/audit/'), api('/exceptions/'), api('/funds/')
+  ]);
+
+  // Ticker
+  if (funds) {
+    document.getElementById('ticker').innerHTML = funds.map((f,i) => `
+      <div class="ticker-item"><div class="ticker-sym">${f.ticker}</div><div class="ticker-val">$${f.nav.toFixed(2)} <span class="ticker-chg ${i===1?'delta-down':'delta-up'}">${i===1?'-0.12%':'+0.'+Math.floor(Math.random()*9+1)+'%'}</span></div></div>
+      ${i<funds.length-1?'<div class="sep"></div>':''}
+    `).join('');
+  }
+
+  // Stats
+  if (stats) {
+    document.getElementById('stats-grid').innerHTML = `
+      <div class="stat-card"><div class="stat-label">AUM (Total)</div><div class="stat-value">${fmtMoney(stats.total_aum)}</div><div class="stat-delta delta-up">↑ +$84M this month</div></div>
+      <div class="stat-card"><div class="stat-label">Pending Filings</div><div class="stat-value">${stats.pending_filings}</div><div class="stat-delta delta-warn">⚠ 1 due in 3 days</div></div>
+      <div class="stat-card"><div class="stat-label">Open Exceptions</div><div class="stat-value">${stats.open_exceptions}</div><div class="stat-delta delta-down">↑ +2 since yesterday</div></div>
+      <div class="stat-card"><div class="stat-label">Active Funds</div><div class="stat-value">${stats.funds}</div><div class="stat-delta delta-up">All systems live</div></div>
+    `;
+    document.getElementById('badge-filings').textContent = stats.pending_filings;
+    document.getElementById('badge-exceptions').textContent = stats.open_exceptions;
+  }
+
+  // Filing calendar
+  if (filings) {
+    const upcoming = filings.filter(f => f.status !== 'filed').slice(0,5);
+    document.getElementById('filing-calendar').innerHTML = upcoming.map(f => {
+      const color = f.status === 'in_review' ? 'var(--red)' : 'var(--amber)';
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 1rem;border-bottom:1px solid var(--border)">
+        <div style="font-family:var(--mono);font-size:12px;color:var(--text0);width:80px">${f.form_type}</div>
+        <div style="flex:1;font-size:12px;color:var(--text1)">${f.description||''}</div>
+        <span class="badge badge-${f.status==='in_review'?'red':f.status==='filed'?'green':'amber'}">${f.due_date||'TBD'}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // Audit feed
+  if (auditData) {
+    const iconMap = {APPROVE:'approved',FILED:'filed',FLAG:'flagged',UPDATE:'updated',INGEST:'filed',CREATE:'filed'};
+    const emojiMap = {APPROVE:'✓',FILED:'↑',FLAG:'!',UPDATE:'~',INGEST:'↑',CREATE:'+'};
+    document.getElementById('audit-feed').innerHTML = auditData.slice(0,5).map(l => `
+      <div class="audit-item">
+        <div class="audit-icon ${iconMap[l.event_type]||'filed'}">${emojiMap[l.event_type]||'·'}</div>
+        <div><div class="audit-action"><strong>${l.resource}</strong> — ${l.action}</div><div class="audit-meta">${timeAgo(l.timestamp)} · ${l.actor}</div></div>
+      </div>`).join('');
+  }
+
+  // Critical exceptions
+  if (exceptions) {
+    const crit = exceptions.filter(e => e.status === 'open').slice(0,3);
+    const sev = {CRITICAL:'var(--red)',HIGH:'var(--amber)',MEDIUM:'var(--accent)'};
+    document.getElementById('critical-exceptions').innerHTML = crit.map(e => `
+      <div class="exception-item">
+        <div class="exc-severity" style="background:${sev[e.severity]||'var(--text2)'}"></div>
+        <div class="exc-info"><div class="exc-title">${e.title}</div><div class="exc-desc">${e.description||''}</div></div>
+        ${severityBadge(e.severity)}
+        <div class="exc-time">${timeAgo(e.raised_at)}</div>
+      </div>`).join('') || '<div class="loading">No critical exceptions</div>';
+  }
+
+  // NAV Chart
+  const days = Array.from({length:90},(_,i)=>{const d=new Date('2025-12-19');d.setDate(d.getDate()+i);return d.toLocaleDateString('en-US',{month:'short',day:'numeric'})});
+  const rand=(b,v)=>Array.from({length:90},(_,i)=>+(b+Math.sin(i*.18)*v*2+(Math.random()-.45)*v+i*v*.015).toFixed(2));
+  const existing = Chart.getChart('navChart');
+  if (existing) existing.destroy();
+  new Chart(document.getElementById('navChart'),{type:'line',data:{labels:days,datasets:[
+    {data:rand(44,1.8),borderColor:'#2e86ff',borderWidth:1.5,pointRadius:0,tension:.4},
+    {data:rand(30,1.1),borderColor:'#8b7fff',borderWidth:1.5,pointRadius:0,tension:.4},
+    {data:rand(21,.9),borderColor:'#00d68f',borderWidth:1.5,pointRadius:0,tension:.4}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{backgroundColor:'#1c2230',borderColor:'#2a3850',borderWidth:1,titleColor:'#9aafc8',bodyColor:'#e8edf5',titleFont:{family:'IBM Plex Mono',size:11},bodyFont:{family:'IBM Plex Mono',size:12}}},scales:{x:{ticks:{color:'#5a7090',font:{family:'IBM Plex Mono',size:10},maxTicksLimit:6},grid:{color:'#1e2a3a'},border:{color:'#1e2a3a'}},y:{ticks:{color:'#5a7090',font:{family:'IBM Plex Mono',size:10}},grid:{color:'#1e2a3a'},border:{color:'#1e2a3a'}}}}});
+}
+
+// ─── Filings ───────────────────────────────────────────────
+let allFilings = [];
+async function loadFilings() {
+  allFilings = await api('/filings/') || [];
+  renderFilings(allFilings);
+}
+function renderFilings(list) {
+  document.getElementById('filings-table').innerHTML = list.map(f => `
+    <tr>
+      <td class="mono">${f.form_type}</td>
+      <td>${f.description||'—'}</td>
+      <td>${f.fund?`<span class="badge badge-blue">${f.fund.ticker}</span>`:'<span class="badge badge-gray">All</span>'}</td>
+      <td>${statusBadge(f.status)}</td>
+      <td>${f.assignee||'Unassigned'}</td>
+      <td class="mono" style="color:${new Date(f.due_date)<new Date()?'var(--red)':'var(--amber)'}">${f.due_date||'TBD'}</td>
+      <td>${statusBadge(f.edgar_status)}</td>
+      <td style="display:flex;gap:6px">
+        <button class="btn" onclick="openModal('aiReview')">AI Review</button>
+        ${f.status==='pending_approval'?`<button class="btn btn-primary" onclick="currentFilingId=${f.id};openModal('approve')">Approve</button>`:''}
+      </td>
+    </tr>`).join('');
+}
+function filterFilings() {
+  const q = document.getElementById('filing-search').value.toLowerCase();
+  renderFilings(allFilings.filter(f => (f.form_type+f.description+f.assignee).toLowerCase().includes(q)));
+}
+async function submitFiling() {
+  const data = {form_type:document.getElementById('f-type').value, fund_id:parseInt(document.getElementById('f-fund').value), description:document.getElementById('f-desc').value, assignee:document.getElementById('f-assignee').value, due_date:document.getElementById('f-due').value||null, notes:document.getElementById('f-notes').value};
+  await api('/filings/', {method:'POST',body:JSON.stringify(data)});
+  closeModal('newFiling');
+  await loadFilings();
+  await loadDashboard();
+}
+async function submitApproval() {
+  const notes = document.getElementById('approve-notes').value;
+  if (!notes) { alert('Please add approval notes'); return; }
+  await api(`/filings/${currentFilingId}/approve?approver=Alex+Rivera&notes=${encodeURIComponent(notes)}`, {method:'POST'});
+  closeModal('approve');
+  await loadFilings();
+  await loadAudit();
+}
+
+// ─── Workflows ─────────────────────────────────────────────
+async function loadWorkflows() {
+  const workflows = await api('/workflows/') || [];
+  if (!workflows.length) {
+    document.getElementById('workflows-content').innerHTML = '<div class="loading">No active workflows. Create a filing to start a workflow.</div>';
+    return;
+  }
+  const statusColor = {needs_action:'var(--red)',in_progress:'var(--amber)',complete:'var(--green)'};
+  document.getElementById('workflows-content').innerHTML = `<div class="three-col">${workflows.map(w => `
+    <div class="panel">
+      <div class="panel-head"><div class="panel-title">${w.name}</div>${statusBadge(w.status)}</div>
+      <div style="padding:.75rem">
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:12px">
+          <div style="flex:1;height:3px;background:var(--bg3);border-radius:2px"><div style="width:${Math.round(w.current_step/w.total_steps*100)}%;height:100%;background:var(--accent);border-radius:2px"></div></div>
+          <span style="font-size:10px;font-family:var(--mono);color:var(--text2)">${w.current_step}/${w.total_steps}</span>
+        </div>
+        ${(w.steps||[]).map(s=>`<div class="check-item" style="padding:6px 0">
+          <div style="width:16px;height:16px;border-radius:3px;border:1px solid ${s.status==='complete'?'var(--green2)':s.status==='pending'?'var(--amber)':'var(--border2)'};background:${s.status==='complete'?'var(--green2)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:10px;color:white">${s.status==='complete'?'✓':''}</div>
+          <div style="flex:1"><div class="check-text ${s.status==='complete'?'done':''}">${s.title}</div>${s.assignee?`<div class="check-owner">${s.assignee}</div>`:''}</div>
+        </div>`).join('')}
+        <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+          <div style="font-size:11px;color:var(--text2)">Assigned to: ${w.assignee||'Unassigned'} · Due: ${w.due_date||'TBD'}</div>
+        </div>
+      </div>
+    </div>`).join('')}</div>`;
+}
+
+// ─── Audit Log ─────────────────────────────────────────────
+async function loadAudit() {
+  const logs = await api('/audit/?limit=50') || [];
+  const typeColor = {APPROVE:'badge-green',FILED:'badge-blue',FLAG:'badge-red',UPDATE:'badge-amber',INGEST:'badge-blue',CREATE:'badge-purple',RESOLVE:'badge-green'};
+  document.getElementById('audit-table').innerHTML = logs.map(l => `
+    <tr>
+      <td class="mono" style="font-size:11px">${new Date(l.timestamp).toLocaleString()}</td>
+      <td><span class="badge ${typeColor[l.event_type]||'badge-gray'}">${l.event_type}</span></td>
+      <td>${l.actor}</td>
+      <td class="mono" style="font-size:11px;color:var(--text2)">${l.resource}</td>
+      <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.action}</td>
+      <td>${l.evidence_ref?`<span class="badge badge-blue">${l.evidence_ref}</span>`:'—'}</td>
+      <td class="mono" style="color:var(--text2);font-size:11px">${l.ip_address||'—'}</td>
+    </tr>`).join('');
+}
+
+// ─── Pipelines ─────────────────────────────────────────────
+async function loadPipelines() {
+  const [pipes, stats] = await Promise.all([api('/pipelines/'), api('/pipelines/stats')]);
+  if (stats) {
+    document.getElementById('pipeline-stats').innerHTML = `
+      <div class="stat-card"><div class="stat-label">Files Today</div><div class="stat-value">${stats.files_today}</div><div class="stat-delta">Total pipeline runs</div></div>
+      <div class="stat-card"><div class="stat-label">Total Rows</div><div class="stat-value">${(stats.total_rows/1000).toFixed(1)}K</div><div class="stat-delta delta-up">Processed today</div></div>
+      <div class="stat-card"><div class="stat-label">SLA Breaches</div><div class="stat-value">${stats.sla_breaches}</div><div class="stat-delta ${stats.sla_breaches>0?'delta-down':'delta-up'}">${stats.sla_breaches>0?'⚠ Action required':'All on time'}</div></div>`;
+  }
+  if (pipes) {
+    document.getElementById('pipelines-table').innerHTML = pipes.map(p => `
+      <tr>
+        <td style="font-weight:500;color:var(--text0)">${p.vendor}</td>
+        <td>${p.data_type}</td>
+        <td class="mono">${p.method}</td>
+        <td class="mono" style="font-size:11px">${p.started_at?new Date(p.started_at).toLocaleTimeString():'-'}</td>
+        <td>${statusBadge(p.status)}</td>
+        <td class="mono">${p.rows_processed?.toLocaleString()||'—'}</td>
+        <td><span class="badge badge-${p.exceptions_raised>0?'red':'green'}">${p.exceptions_raised}</span></td>
+        <td><span class="badge badge-${p.sla_met?'green':'red'}">${p.sla_met?'On time':'Breached'}</span></td>
+      </tr>`).join('');
+  }
+}
+
+// ─── Funds ─────────────────────────────────────────────────
+async function loadFunds() {
+  const [funds] = await Promise.all([api('/funds/')]);
+  if (funds) {
+    document.getElementById('fund-stats').innerHTML = funds.map(f => `
+      <div class="stat-card"><div class="stat-label">${f.ticker} AUM</div><div class="stat-value">${fmtMoney(f.aum)}</div><div class="stat-delta delta-up">↑ +$${Math.floor(Math.random()*50+10)}M MTD</div></div>
+    `).join('') + `<div class="stat-card"><div class="stat-label">Total Funds</div><div class="stat-value">${funds.length}</div><div class="stat-delta">All trading</div></div>`;
+    // load holdings for first fund
+    const holdings = await api('/funds/1/holdings') || [];
+    const reconColor = {ok:'green',price_break:'red',corp_action:'amber'};
+    document.getElementById('holdings-table').innerHTML = holdings.map(h => `
+      <tr>
+        <td class="mono" style="color:${h.recon_status==='price_break'?'var(--red)':'var(--accent)'}">${h.ticker}</td>
+        <td>${h.name}</td>
+        <td class="mono" style="font-size:11px;color:var(--text2)">${h.isin}</td>
+        <td class="mono">${h.weight?.toFixed(2)}%</td>
+        <td class="mono">${h.shares?.toLocaleString()}</td>
+        <td class="mono">$${h.price?.toFixed(2)}</td>
+        <td class="mono">$${(h.market_value/1e6).toFixed(1)}M</td>
+        <td><span class="badge badge-${reconColor[h.recon_status]||'gray'}">${h.recon_status==='ok'?'✓':h.recon_status?.replace('_',' ')}</span></td>
+      </tr>`).join('');
+  }
+}
+
+// ─── Exceptions ────────────────────────────────────────────
+async function loadExceptions() {
+  const exceptions = await api('/exceptions/') || [];
+  const open = exceptions.filter(e => e.status === 'open');
+  document.getElementById('exc-count').textContent = `${open.length} open · ${exceptions.filter(e=>e.severity==='CRITICAL'&&e.status==='open').length} critical`;
+  const sev = {CRITICAL:'var(--red)',HIGH:'var(--amber)',MEDIUM:'var(--accent)',LOW:'var(--text2)'};
+  document.getElementById('exceptions-table').innerHTML = exceptions.map(e => `
+    <tr>
+      <td>${severityBadge(e.severity)}</td>
+      <td>${e.category}</td>
+      <td style="max-width:200px">${e.title}</td>
+      <td>${e.fund?`<span class="badge badge-blue">${e.fund.ticker}</span>`:'<span class="badge badge-gray">All</span>'}</td>
+      <td class="mono" style="font-size:11px">${timeAgo(e.raised_at)}</td>
+      <td>${e.assignee||'<span style="color:var(--text2)">Unassigned</span>'}</td>
+      <td>${statusBadge(e.status)}</td>
+      <td><button class="btn" onclick="resolveException(${e.id})">${e.status==='open'?'Resolve':'View'}</button></td>
+    </tr>`).join('');
+}
+async function resolveException(id) {
+  await api(`/exceptions/${id}/resolve?actor=Alex+Rivera&notes=Resolved+via+dashboard`, {method:'POST'});
+  await loadExceptions();
+  await loadDashboard();
+}
+
+// ─── AI Review ─────────────────────────────────────────────
+async function runAIReview() {
+  const text = document.getElementById('review-text').value;
+  const btn = document.getElementById('ai-btn');
+  const result = document.getElementById('ai-result');
+  btn.disabled = true; btn.textContent = 'Analyzing...';
+  result.textContent = 'Running compliance analysis...';
+  const data = await api('/ai/review', {method:'POST', body:JSON.stringify({text})});
+  result.textContent = data?.result || 'Error — check API key configuration.';
+  btn.disabled = false; btn.textContent = 'Run Again';
+}
+
+// ─── Page loaders ──────────────────────────────────────────
+const loaders = {
+  dashboard: loadDashboard,
+  filings: loadFilings,
+  workflows: loadWorkflows,
+  audit: loadAudit,
+  pipelines: loadPipelines,
+  funds: loadFunds,
+  exceptions: loadExceptions
+};
+
+// Init
+loadDashboard();
+</script>
+</body>
+</html>
