@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
     action TEXT NOT NULL,
     evidence_ref VARCHAR(100),
     ip_address VARCHAR(45),
-    metadata JSONB
+    extra_metadata JSONB
 );
 
 CREATE TABLE IF NOT EXISTS exceptions (
@@ -108,53 +108,39 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
     completed_at TIMESTAMP
 );
 
--- ─── SEED DATA ───────────────────────────────
+INSERT INTO funds (ticker, name, aum, nav, inception_date) VALUES ('CRGX', 'Corgi Growth ETF', 1400000000, 48.23, '2020-03-01') ON CONFLICT (ticker) DO NOTHING;
+INSERT INTO funds (ticker, name, aum, nav, inception_date) VALUES ('CRGB', 'Corgi Bond ETF', 680000000, 31.07, '2021-06-15') ON CONFLICT (ticker) DO NOTHING;
+INSERT INTO funds (ticker, name, aum, nav, inception_date) VALUES ('CRGG', 'Corgi Global ETF', 320000000, 22.81, '2022-01-10') ON CONFLICT (ticker) DO NOTHING;
 
-INSERT INTO funds (ticker, name, aum, nav, inception_date) VALUES
-  ('CRGX', 'Corgi Growth ETF',   1400000000, 48.23, '2020-03-01'),
-  ('CRGB', 'Corgi Bond ETF',      680000000, 31.07, '2021-06-15'),
-  ('CRGG', 'Corgi Global ETF',    320000000, 22.81, '2022-01-10')
-ON CONFLICT (ticker) DO NOTHING;
+INSERT INTO filings (form_type, fund_id, description, status, assignee, due_date, edgar_status, ixbrl_status) VALUES ('N-PORT', 1, 'Monthly Portfolio Holdings - CRGX', 'in_review', 'Sarah Chen', '2026-03-21', 'draft', 'in_progress') ON CONFLICT DO NOTHING;
+INSERT INTO filings (form_type, fund_id, description, status, assignee, due_date, edgar_status, ixbrl_status) VALUES ('N-CEN', NULL, 'Annual Report for Registered Funds', 'in_progress', 'Marcus Lee', '2026-04-15', 'not_submitted', 'not_started') ON CONFLICT DO NOTHING;
+INSERT INTO filings (form_type, fund_id, description, status, assignee, due_date, edgar_status, ixbrl_status) VALUES ('485BPOS', 2, 'Post-Effective Prospectus Amendment - CRGB', 'pending_approval', 'Alex Rivera', '2026-04-30', 'ixbrl_needed', 'in_progress') ON CONFLICT DO NOTHING;
+INSERT INTO filings (form_type, fund_id, description, status, assignee, due_date, edgar_status, ixbrl_status) VALUES ('N-PORT', 3, 'Monthly Portfolio Holdings - CRGG', 'filed', 'Sarah Chen', '2026-02-21', 'accepted', 'complete') ON CONFLICT DO NOTHING;
+INSERT INTO filings (form_type, fund_id, description, status, assignee, due_date, edgar_status, ixbrl_status) VALUES ('497', 1, 'Definitive Materials - Fee Update', 'filed', 'Marcus Lee', '2026-02-10', 'accepted', 'complete') ON CONFLICT DO NOTHING;
 
-INSERT INTO filings (form_type, fund_id, description, status, assignee, due_date, edgar_status, ixbrl_status) VALUES
-  ('N-PORT',  1, 'Monthly Portfolio Holdings — CRGX',         'in_review',        'Sarah Chen',  '2026-03-21', 'draft',         'in_progress'),
-  ('N-CEN',   NULL, 'Annual Report for Registered Funds',     'in_progress',      'Marcus Lee',  '2026-04-15', 'not_submitted', 'not_started'),
-  ('485BPOS', 2, 'Post-Effective Prospectus Amendment — CRGB','pending_approval',  'Alex Rivera', '2026-04-30', 'ixbrl_needed',  'in_progress'),
-  ('N-PORT',  3, 'Monthly Portfolio Holdings — CRGG',         'filed',            'Sarah Chen',  '2026-02-21', 'accepted',      'complete'),
-  ('497',     1, 'Definitive Materials — Fee Update',         'filed',            'Marcus Lee',  '2026-02-10', 'accepted',      'complete')
-ON CONFLICT DO NOTHING;
+INSERT INTO exceptions (severity, category, title, description, fund_id, status, assignee) VALUES ('CRITICAL', 'Price Recon', 'GOOGL price mismatch - Bloomberg vs ICE', 'ISIN US02079K3059 exceeds 0.05% threshold', 1, 'open', 'Sarah Chen') ON CONFLICT DO NOTHING;
+INSERT INTO exceptions (severity, category, title, description, fund_id, status, assignee) VALUES ('CRITICAL', 'N-PORT', 'Position count mismatch - 847 vs 849', 'EDGAR pre-validation: position count differs from fund admin', 1, 'open', 'Sarah Chen') ON CONFLICT DO NOTHING;
+INSERT INTO exceptions (severity, category, title, description, fund_id, status, assignee) VALUES ('HIGH', 'Corp Action', 'MSFT dividend adjustment missing', 'Expected DRIP adjustment not received from Broadridge', 1, 'in_review', 'Marcus Lee') ON CONFLICT DO NOTHING;
+INSERT INTO exceptions (severity, category, title, description, fund_id, status, assignee) VALUES ('HIGH', 'Vendor SLA', 'Broadridge file 34m past SLA', 'Corporate actions file delayed', NULL, 'open', NULL) ON CONFLICT DO NOTHING;
+INSERT INTO exceptions (severity, category, title, description, fund_id, status, assignee) VALUES ('MEDIUM', 'Disclosure', 'Fee table change not reflected on web page', 'CRGB expense ratio updated in doc but not on fund page', 2, 'in_progress', 'Marcus Lee') ON CONFLICT DO NOTHING;
+INSERT INTO exceptions (severity, category, title, description, fund_id, status, assignee) VALUES ('MEDIUM', 'Data Quality', 'Sector classification mismatch - 3 securities', 'GICS sector codes differ between Bloomberg and ICE', 3, 'in_review', 'Alex Rivera') ON CONFLICT DO NOTHING;
+INSERT INTO exceptions (severity, category, title, description, fund_id, status, assignee) VALUES ('LOW', 'Reporting', 'Stale NAV on public fund page - 2h delay', 'CRGX NAV not updated after market close', 1, 'open', NULL) ON CONFLICT DO NOTHING;
 
-INSERT INTO exceptions (severity, category, title, description, fund_id, status, assignee) VALUES
-  ('CRITICAL', 'Price Recon',  'GOOGL price mismatch — Bloomberg vs ICE Δ $1.47', 'ISIN US02079K3059 exceeds 0.05% threshold', 1, 'open', 'Sarah Chen'),
-  ('CRITICAL', 'N-PORT',      'Position count mismatch — 847 vs 849',             'EDGAR pre-validation: position count differs from fund admin', 1, 'open', 'Sarah Chen'),
-  ('HIGH',     'Corp Action', 'MSFT dividend adjustment missing',                  'Expected DRIP adjustment not received from Broadridge', 1, 'in_review', 'Marcus Lee'),
-  ('HIGH',     'Vendor SLA',  'Broadridge file 34m past SLA',                      'Corporate actions file delayed', NULL, 'open', NULL),
-  ('MEDIUM',   'Disclosure',  'Fee table change not reflected on web page',        'CRGB expense ratio updated in doc but not on fund page', 2, 'in_progress', 'Marcus Lee'),
-  ('MEDIUM',   'Data Quality','Sector classification mismatch — 3 securities',    'GICS sector codes differ between Bloomberg and ICE', 3, 'in_review', 'Alex Rivera'),
-  ('LOW',      'Reporting',   'Stale NAV on public fund page — 2h delay',         'CRGX NAV not updated after market close', 1, 'open', NULL)
-ON CONFLICT DO NOTHING;
+INSERT INTO holdings (fund_id, ticker, name, isin, weight, shares, price, market_value, recon_status) VALUES (1, 'AAPL', 'Apple Inc.', 'US0378331005', 7.42, 842000, 237.04, 199607680, 'ok') ON CONFLICT DO NOTHING;
+INSERT INTO holdings (fund_id, ticker, name, isin, weight, shares, price, market_value, recon_status) VALUES (1, 'MSFT', 'Microsoft Corp.', 'US5949181045', 6.91, 511000, 385.20, 196737200, 'corp_action') ON CONFLICT DO NOTHING;
+INSERT INTO holdings (fund_id, ticker, name, isin, weight, shares, price, market_value, recon_status) VALUES (1, 'NVDA', 'NVIDIA Corp.', 'US67066G1040', 5.88, 1204000, 138.44, 166681760, 'ok') ON CONFLICT DO NOTHING;
+INSERT INTO holdings (fund_id, ticker, name, isin, weight, shares, price, market_value, recon_status) VALUES (1, 'GOOGL', 'Alphabet Inc. Cl A', 'US02079K3059', 4.21, 702000, 170.58, 119747160, 'price_break') ON CONFLICT DO NOTHING;
+INSERT INTO holdings (fund_id, ticker, name, isin, weight, shares, price, market_value, recon_status) VALUES (1, 'AMZN', 'Amazon.com Inc.', 'US0231351067', 4.05, 615000, 234.22, 144045300, 'ok') ON CONFLICT DO NOTHING;
 
-INSERT INTO holdings (fund_id, ticker, name, isin, weight, shares, price, market_value, recon_status) VALUES
-  (1, 'AAPL',  'Apple Inc.',          'US0378331005', 7.42, 842000,  237.04, 199607680, 'ok'),
-  (1, 'MSFT',  'Microsoft Corp.',     'US5949181045', 6.91, 511000,  385.20, 196737200, 'corp_action'),
-  (1, 'NVDA',  'NVIDIA Corp.',        'US67066G1040', 5.88, 1204000, 138.44, 166681760, 'ok'),
-  (1, 'GOOGL', 'Alphabet Inc. Cl A',  'US02079K3059', 4.21, 702000,  170.58, 119747160, 'price_break'),
-  (1, 'AMZN',  'Amazon.com Inc.',     'US0231351067', 4.05, 615000,  234.22, 144045300, 'ok')
-ON CONFLICT DO NOTHING;
+INSERT INTO pipeline_runs (vendor, data_type, method, status, rows_processed, exceptions_raised, sla_met, file_name) VALUES ('State Street', 'Holdings', 'SFTP', 'complete', 2847, 0, true, 'holdings_20260318.csv') ON CONFLICT DO NOTHING;
+INSERT INTO pipeline_runs (vendor, data_type, method, status, rows_processed, exceptions_raised, sla_met, file_name) VALUES ('Bloomberg', 'Prices', 'API', 'complete', 4201, 1, true, NULL) ON CONFLICT DO NOTHING;
+INSERT INTO pipeline_runs (vendor, data_type, method, status, rows_processed, exceptions_raised, sla_met, file_name) VALUES ('ICE Data', 'Prices', 'API', 'complete', 4199, 0, true, NULL) ON CONFLICT DO NOTHING;
+INSERT INTO pipeline_runs (vendor, data_type, method, status, rows_processed, exceptions_raised, sla_met, file_name) VALUES ('Broadridge', 'Corporate Actions', 'SFTP', 'delayed', 0, 1, false, NULL) ON CONFLICT DO NOTHING;
+INSERT INTO pipeline_runs (vendor, data_type, method, status, rows_processed, exceptions_raised, sla_met, file_name) VALUES ('DTCC', 'Settlement/NAV', 'API', 'scheduled', 0, 0, true, NULL) ON CONFLICT DO NOTHING;
 
-INSERT INTO pipeline_runs (vendor, data_type, method, status, rows_processed, exceptions_raised, sla_met, file_name) VALUES
-  ('State Street', 'Holdings',         'SFTP', 'complete', 2847, 0, true,  'holdings_20260318.csv'),
-  ('Bloomberg',    'Prices',           'API',  'complete', 4201, 1, true,  NULL),
-  ('ICE Data',     'Prices',           'API',  'complete', 4199, 0, true,  NULL),
-  ('Broadridge',   'Corporate Actions','SFTP', 'delayed',  0,    1, false, NULL),
-  ('DTCC',         'Settlement/NAV',   'API',  'scheduled',0,    0, true,  NULL)
-ON CONFLICT DO NOTHING;
-
-INSERT INTO audit_log (event_type, actor, resource, action, evidence_ref, ip_address) VALUES
-  ('APPROVE', 'Sarah Chen',     'N-PORT/CRGX/2026-03',        'Approved draft for filing',                         'Evidence #1847', '10.0.1.42'),
-  ('INGEST',  'pipeline-bot',   'holdings.SFTP.state-street', 'File received, 2847 rows parsed',                   'Job #8821',      '10.0.2.11'),
-  ('FLAG',    'recon-engine',   'price/US02079K3059',         'Price discrepancy exceeds threshold',               'Alert #294',     '10.0.2.11'),
-  ('UPDATE',  'Marcus Lee',     'doc/485BPOS/CRGB/v4.1',      'Fee table revised — expense ratio 0.35% to 0.32%', 'Diff #442',      '10.0.1.88'),
-  ('APPROVE', 'Outside Counsel','doc/485BPOS/CRGB/legal',     'Legal sign-off granted — disclosure section',       'Evidence #1801', 'External'),
-  ('FILED',   'Sarah Chen',     'EDGAR/N-PORT/CRGX/FEB',      'Submitted to EDGAR — accession received',           'Accession #098', '10.0.1.42')
-ON CONFLICT DO NOTHING;
+INSERT INTO audit_log (event_type, actor, resource, action, evidence_ref, ip_address) VALUES ('APPROVE', 'Sarah Chen', 'N-PORT/CRGX/2026-03', 'Approved draft for filing', 'Evidence #1847', '10.0.1.42') ON CONFLICT DO NOTHING;
+INSERT INTO audit_log (event_type, actor, resource, action, evidence_ref, ip_address) VALUES ('INGEST', 'pipeline-bot', 'holdings.SFTP.state-street', 'File received, 2847 rows parsed', 'Job #8821', '10.0.2.11') ON CONFLICT DO NOTHING;
+INSERT INTO audit_log (event_type, actor, resource, action, evidence_ref, ip_address) VALUES ('FLAG', 'recon-engine', 'price/US02079K3059', 'Price discrepancy exceeds threshold', 'Alert #294', '10.0.2.11') ON CONFLICT DO NOTHING;
+INSERT INTO audit_log (event_type, actor, resource, action, evidence_ref, ip_address) VALUES ('UPDATE', 'Marcus Lee', 'doc/485BPOS/CRGB/v4.1', 'Fee table revised', 'Diff #442', '10.0.1.88') ON CONFLICT DO NOTHING;
+INSERT INTO audit_log (event_type, actor, resource, action, evidence_ref, ip_address) VALUES ('APPROVE', 'Outside Counsel', 'doc/485BPOS/CRGB/legal', 'Legal sign-off granted', 'Evidence #1801', 'External') ON CONFLICT DO NOTHING;
+INSERT INTO audit_log (event_type, actor, resource, action, evidence_ref, ip_address) VALUES ('FILED', 'Sarah Chen', 'EDGAR/N-PORT/CRGX/FEB', 'Submitted to EDGAR - accession received', 'Accession #098', '10.0.1.42') ON CONFLICT DO NOTHING;
