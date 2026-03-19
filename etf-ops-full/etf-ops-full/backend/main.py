@@ -19,16 +19,15 @@ def seed_database():
             with engine.connect() as conn:
                 with open(sql_path) as f:
                     from sqlalchemy import text
-                    statements = [s.strip() for s in f.read().split(";") if s.strip() and not s.strip().startswith("--")]
-                    for statement in statements:
-                        try:
-                            conn.execute(text(statement))
-                        except Exception as e:
-                            print(f"Statement skipped: {e}")
+                    for s in f.read().split(";"):
+                        s = s.strip()
+                        if s and not s.startswith("--"):
+                            try:
+                                conn.execute(text(s))
+                            except Exception as e:
+                                print(f"Statement skipped: {e}")
                     conn.commit()
             print("Database seeded successfully")
-        else:
-            print("init.sql not found")
     except Exception as e:
         print(f"Seed error: {e}")
 
@@ -78,8 +77,3 @@ def health():
 def reseed():
     seed_database()
     return {"status": "reseeded"}
-```
-
-I added a `/api/admin/reseed` endpoint at the bottom. After you push and deploy, just visit:
-```
-https://etf-ops.onrender.com/api/admin/reseed
