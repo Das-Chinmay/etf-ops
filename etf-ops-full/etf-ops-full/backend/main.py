@@ -12,27 +12,34 @@ def seed_database():
         count = db.query(models.Fund).count()
         db.close()
         if count > 0:
+            print(f"Database already has {count} funds, skipping seed")
             return
         sql_path = os.path.join(os.path.dirname(__file__), "init.sql")
         if os.path.exists(sql_path):
             with engine.connect() as conn:
                 with open(sql_path) as f:
                     from sqlalchemy import text
-                    for statement in f.read().split(";"):
-                        s = statement.strip()
-                        if s and not s.startswith("--"):
-                            try:
-                                conn.execute(text(s))
-                            except Exception:
-                                pass
+                    statements = [s.strip() for s in f.read().split(";") if s.strip() and not s.strip().startswith("--")]
+                    for statement in statements:
+                        try:
+                            conn.execute(text(statement))
+                        except Exception as e:
+                            print(f"Statement skipped: {e}")
                     conn.commit()
-            print("Database seeded")
+            print("Database seeded successfully")
+        else:
+            print("init.sql not found")
     except Exception as e:
-        print(f"Seed skipped: {e}")
+        print(f"Seed error: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+        print("Tables created successfully")
+    except Exception as e:
+        print(f"DB error: {e}")
+        raise
     seed_database()
     yield
 
@@ -66,3 +73,13 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "healthy"}
+
+@app.post("/api/admin/reseed")
+def reseed():
+    seed_database()
+    return {"status": "reseeded"}
+```
+
+I added a `/api/admin/reseed` endpoint at the bottom. After you push and deploy, just visit:
+```
+https://etf-ops.onrender.com/api/admin/reseed
