@@ -763,7 +763,7 @@ async function runAIReview() {
 // ─── EDGAR Live Filings ────────────────────────────────────
 async function loadEDGARFilings() {
   try {
-    const res = await fetch('https://efts.sec.gov/LATEST/search-index?q=%22N-PORT%22&forms=N-PORT&hits.hits.total.value=true&hits.hits._source=period_of_report,entity_name,file_date,form_type&dateRange=custom&startdt=2026-01-01&enddt=2026-12-31');
+    const res = await fetch('https://efts.sec.gov/LATEST/search-index?q=%22ETF%22&forms=N-PORT&dateRange=custom&startdt=2025-01-01&enddt=2025-12-31');
     const data = await res.json();
     const hits = data?.hits?.hits || [];
     if (!hits.length) {
@@ -782,7 +782,7 @@ async function loadEDGARFilings() {
         <tbody>
           ${hits.slice(0,8).map(h => {
             const s = h._source || {};
-            const entityName = s.entity_name || 'Unknown';
+            const entityName = (s.display_names && s.display_names[0]) ? s.display_names[0].name : (s.entity_name || 'Unknown');
             const fileDate = s.file_date ? new Date(s.file_date).toLocaleDateString() : '—';
             const period = s.period_of_report || '—';
             const form = s.form_type || 'N-PORT';
