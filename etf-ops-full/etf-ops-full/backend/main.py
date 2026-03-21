@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from contextlib import asynccontextmanager
 from database import engine, Base, SessionLocal
-import models, os
+import models, os, httpx
 
 from routes import filings, exceptions, audit, pipelines, funds, workflows, ai_review
 
@@ -77,3 +78,16 @@ def health():
 def reseed():
     seed_database()
     return {"status": "reseeded"}
+
+@app.get("/api/edgar/recent", response_class=PlainTextResponse)
+async def edgar_recent():
+    url = "https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=N-PORT&dateb=&owner=include&count=10&search_text=&output=atom"
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            r = await client.get(url, headers={
+                "User-Agent": "Corgi ETF Ops demo@example.com",
+                "Accept": "application/atom+xml"
+            })
+            return r.text
+    except Exception as e:
+        return f"<error>{str(e)}</error>"
