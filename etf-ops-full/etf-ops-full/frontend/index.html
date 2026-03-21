@@ -763,45 +763,46 @@ async function runAIReview() {
 // ─── EDGAR Live Filings ────────────────────────────────────
 async function loadEDGARFilings() {
   try {
-    const res = await fetch('https://efts.sec.gov/LATEST/search-index?q=%22ETF%22&forms=N-PORT&dateRange=custom&startdt=2025-01-01&enddt=2025-12-31');
-    const data = await res.json();
-    const hits = data?.hits?.hits || [];
-    if (!hits.length) {
-      document.getElementById('edgar-filings').innerHTML = '<div class="loading">No recent filings found</div>';
+    const res = await fetch(API + '/edgar/recent');
+    const text = await res.text();
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(text, 'application/xml');
+    const entries = Array.from(xml.querySelectorAll('entry'));
+    if (!entries.length) {
+      document.getElementById('edgar-filings').innerHTML = '<div class="loading">No recent filings found on EDGAR</div>';
       return;
     }
+    const rows = entries.slice(0,8).map(e => {
+      const title = e.querySelector('title')?.textContent || '';
+      const updated = e.querySelector('updated')?.textContent || '';
+      const link = e.querySelector('link')?.getAttribute('href') || '#';
+      const fileDate = updated ? new Date(updated).toLocaleDateString() : '—';
+      const parts = title.split(' - ');
+      const formType = parts[0]?.trim() || 'N-PORT';
+      const entityName = parts[1]?.trim() || 'Unknown Entity';
+      return `<tr>
+        <td style="padding:9px 1rem;border-bottom:1px solid var(--border)"><span class="badge badge-blue">${formType}</span></td>
+        <td style="padding:9px 1rem;border-bottom:1px solid var(--border);color:var(--text0);font-size:12px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${entityName}">${entityName}</td>
+        <td style="padding:9px 1rem;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:11px;color:var(--text2)">${fileDate}</td>
+        <td style="padding:9px 1rem;border-bottom:1px solid var(--border)"><a href="${link}" target="_blank" class="btn" style="text-decoration:none;font-size:10px">View on EDGAR ↗</a></td>
+      </tr>`;
+    }).join('');
     document.getElementById('edgar-filings').innerHTML = `
       <table style="width:100%;border-collapse:collapse">
         <thead><tr>
           <th style="padding:8px 1rem;text-align:left;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);font-family:var(--mono);border-bottom:1px solid var(--border)">Form</th>
           <th style="padding:8px 1rem;text-align:left;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);font-family:var(--mono);border-bottom:1px solid var(--border)">Entity</th>
           <th style="padding:8px 1rem;text-align:left;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);font-family:var(--mono);border-bottom:1px solid var(--border)">Filed</th>
-          <th style="padding:8px 1rem;text-align:left;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);font-family:var(--mono);border-bottom:1px solid var(--border)">Period</th>
           <th style="padding:8px 1rem;text-align:left;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text2);font-family:var(--mono);border-bottom:1px solid var(--border)">Link</th>
         </tr></thead>
-        <tbody>
-          ${hits.slice(0,8).map(h => {
-            const s = h._source || {};
-            const entityName = (s.display_names && s.display_names[0]) ? s.display_names[0].name : (s.entity_name || 'Unknown');
-            const fileDate = s.file_date ? new Date(s.file_date).toLocaleDateString() : '—';
-            const period = s.period_of_report || '—';
-            const form = s.form_type || 'N-PORT';
-            const edgarUrl = `https://efts.sec.gov/LATEST/search-index?q=%22${encodeURIComponent(entityName)}%22&forms=${form}`;
-            return `<tr>
-              <td style="padding:9px 1rem;border-bottom:1px solid var(--border)"><span class="badge badge-blue">${form}</span></td>
-              <td style="padding:9px 1rem;border-bottom:1px solid var(--border);color:var(--text0);font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${entityName}</td>
-              <td style="padding:9px 1rem;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:11px;color:var(--text2)">${fileDate}</td>
-              <td style="padding:9px 1rem;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:11px;color:var(--text2)">${period}</td>
-              <td style="padding:9px 1rem;border-bottom:1px solid var(--border)"><a href="${edgarUrl}" target="_blank" class="btn" style="text-decoration:none;font-size:10px">View ↗</a></td>
-            </tr>`;
-          }).join('')}
-        </tbody>
+        <tbody>${rows}</tbody>
       </table>
       <div style="padding:.5rem 1rem;font-size:10px;color:var(--text2);font-family:var(--mono);border-top:1px solid var(--border)">
-        Live data from SEC EDGAR · <a href="https://efts.sec.gov/LATEST/search-index?forms=N-PORT" target="_blank" style="color:var(--accent)">View all on EDGAR ↗</a>
+        Live data from SEC EDGAR · <a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent&type=N-PORT&dateb=&owner=include&count=40" target="_blank" style="color:var(--accent)">View all on EDGAR ↗</a>
       </div>`;
   } catch(e) {
-    document.getElementById('edgar-filings').innerHTML = '<div class="loading">Could not load EDGAR data — check network</div>';
+    document.getElementById('edgar-filings').innerHTML = '<div class="loading">Could not load EDGAR data</div>';
+    console.error('EDGAR error:', e);
   }
 }
 
